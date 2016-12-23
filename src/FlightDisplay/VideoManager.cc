@@ -30,6 +30,7 @@ static const char* kVideoRTSPUrlKey = "VideoRTSPUrl";
 #if defined(QGC_GST_STREAMING)
 static const char* kUDPStream       = "UDP Video Stream";
 static const char* kRTSPStream      = "RTSP Video Stream";
+static const char* kMavlinkStream   = "Mavlink Configured Video Stream";
 #endif
 static const char* kNoVideo         = "No Video Available";
 
@@ -104,7 +105,18 @@ bool
 VideoManager::isGStreamer()
 {
 #if defined(QGC_GST_STREAMING)
-    return _videoSource == kUDPStream || _videoSource == kRTSPStream;
+    return _videoSource == kUDPStream || _videoSource == kRTSPStream || _videoSource == kMavlinkStream;
+#else
+    return false;
+#endif
+}
+
+//-----------------------------------------------------------------------------
+bool
+VideoManager::isMavlinkStream()
+{
+#if defined(QGC_GST_STREAMING)
+    return _videoSource == kMavlinkStream;
 #else
     return false;
 #endif
@@ -154,6 +166,11 @@ VideoManager::setVideoSource(QString vSource)
             _videoReceiver->stop();
         }
     }
+
+    if (vSource == kMavlinkStream)
+        _mavlinkVideoManager.updateStreamList();
+    else
+        _mavlinkVideoManager.setSelectedStream(-1);
 }
 
 //-----------------------------------------------------------------------------
@@ -194,6 +211,7 @@ VideoManager::videoSourceList()
 #if defined(QGC_GST_STREAMING)
     _videoSourceList.append(kUDPStream);
     _videoSourceList.append(kRTSPStream);
+    _videoSourceList.append(kMavlinkStream);
 #endif
 #ifndef QGC_DISABLE_UVC
     QList<QCameraInfo> cameras = QCameraInfo::availableCameras();

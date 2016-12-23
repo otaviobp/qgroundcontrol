@@ -14,10 +14,12 @@
 #include <QObject>
 #include <QTimer>
 
+#include "MavlinkVideoManager.h"
 #include "QGCLoggingCategory.h"
 #include "VideoSurface.h"
 #include "VideoReceiver.h"
 #include "QGCToolbox.h"
+#include "LinkInterface.h"
 
 Q_DECLARE_LOGGING_CATEGORY(VideoManagerLog)
 
@@ -31,6 +33,7 @@ public:
 
     Q_PROPERTY(bool             hasVideo        READ    hasVideo                                NOTIFY hasVideoChanged)
     Q_PROPERTY(bool             isGStreamer     READ    isGStreamer                             NOTIFY isGStreamerChanged)
+    Q_PROPERTY(bool             isMavlinkStream READ    isMavlinkStream                         NOTIFY videoSourceChanged)
     Q_PROPERTY(QString          videoSourceID   READ    videoSourceID                           NOTIFY videoSourceIDChanged)
     Q_PROPERTY(QString          videoSource     READ    videoSource     WRITE setVideoSource    NOTIFY videoSourceChanged)
     Q_PROPERTY(QStringList      videoSourceList READ    videoSourceList                         NOTIFY videoSourceListChanged)
@@ -40,15 +43,18 @@ public:
     Q_PROPERTY(bool             uvcEnabled      READ    uvcEnabled                              CONSTANT)
     Q_PROPERTY(VideoSurface*    videoSurface    MEMBER  _videoSurface                           CONSTANT)
     Q_PROPERTY(VideoReceiver*   videoReceiver   MEMBER  _videoReceiver                          CONSTANT)
+    Q_PROPERTY(MavlinkVideoManager* mavlinkVideoManager READ  mavlinkVideoManager               CONSTANT)
 
     bool        hasVideo            ();
     bool        isGStreamer         ();
+    bool        isMavlinkStream     ();
     bool        videoRunning        () { return _videoRunning; }
     QString     videoSourceID       () { return _videoSourceID; }
     QString     videoSource         () { return _videoSource; }
     QStringList videoSourceList     ();
     quint16     udpPort             () { return _udpPort; }
     QString     rtspURL             () { return _rtspURL; }
+    MavlinkVideoManager* mavlinkVideoManager () { return &_mavlinkVideoManager; }
 
 #if defined(QGC_DISABLE_UVC)
     bool        uvcEnabled          () { return false; }
@@ -69,6 +75,7 @@ signals:
     void videoSourceChanged     ();
     void videoSourceListChanged ();
     void isGStreamerChanged     ();
+    void isMavlinkStreamChanged ();
     void videoSourceIDChanged   ();
     void udpPortChanged         ();
     void rtspURLChanged         ();
@@ -90,6 +97,7 @@ private:
     quint16             _udpPort;
     QString             _rtspURL;
     bool                _init;
+    MavlinkVideoManager _mavlinkVideoManager;
 };
 
 #endif

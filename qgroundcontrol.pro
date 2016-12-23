@@ -933,17 +933,21 @@ INCLUDEPATH += \
     src/VideoStreaming
 
 HEADERS += \
+    src/VideoStreaming/MavlinkVideoManager.h \
     src/VideoStreaming/VideoItem.h \
     src/VideoStreaming/VideoReceiver.h \
     src/VideoStreaming/VideoStreaming.h \
     src/VideoStreaming/VideoSurface.h \
     src/VideoStreaming/VideoSurface_p.h \
+    src/VideoStreaming/VideoUtils.h \
 
 SOURCES += \
+    src/VideoStreaming/MavlinkVideoManager.cc \
     src/VideoStreaming/VideoItem.cc \
     src/VideoStreaming/VideoReceiver.cc \
     src/VideoStreaming/VideoStreaming.cc \
     src/VideoStreaming/VideoSurface.cc \
+    src/VideoStreaming/VideoUtils.cc \
 
 contains (CONFIG, DISABLE_VIDEOSTREAMING) {
     message("Skipping support for video streaming (manual override from command line)")
