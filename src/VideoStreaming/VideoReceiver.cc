@@ -83,7 +83,7 @@ void VideoReceiver::_connected()
     _socket->deleteLater();
     _socket = NULL;
     _serverPresent = true;
-    start();
+    restart();
 }
 #endif
 
@@ -120,21 +120,26 @@ void VideoReceiver::_timeout()
 }
 #endif
 
+void VideoReceiver::restart()
+{
+    stop();
+    start();
+}
+
 void VideoReceiver::start()
 {
 #if defined(QGC_GST_STREAMING)
-    if (_uri.isEmpty()) {
-        qCritical() << "VideoReceiver::start() failed because URI is not specified";
-        return;
-    }
     if (_videoSink == NULL) {
         qCritical() << "VideoReceiver::start() failed because video sink is not set";
         return;
     }
 
-    bool isUdp = _uri.contains("udp://");
+    if (_uri.isEmpty()) {
+        qCritical() << "VideoReceiver::start() failed because URI is not specified";
+        return;
+    }
 
-    stop();
+    bool isUdp = _uri.contains("udp://");
 
     //-- For RTSP, check to see if server is there first
     if(!_serverPresent && !isUdp) {
@@ -142,7 +147,7 @@ void VideoReceiver::start()
         return;
     }
 
-    bool running = false;
+    bool gstreamer_success = false;
 
     GstElement*     dataSource  = NULL;
     GstCaps*        caps        = NULL;
@@ -221,7 +226,7 @@ void VideoReceiver::start()
             bus = NULL;
         }
 
-        running = gst_element_set_state(_pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
+        gstreamer_success = gst_element_set_state(_pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
 
     } while(0);
 
@@ -230,7 +235,7 @@ void VideoReceiver::start()
         caps = NULL;
     }
 
-    if (!running) {
+    if (!gstreamer_success) {
         qCritical() << "VideoReceiver::start() failed";
 
         if (decoder != NULL) {
@@ -258,6 +263,7 @@ void VideoReceiver::start()
             _pipeline = NULL;
         }
     }
+
 #endif
 }
 
@@ -275,7 +281,6 @@ void VideoReceiver::stop()
 
 void VideoReceiver::setUri(const QString & uri)
 {
-    stop();
     _uri = uri;
 }
 

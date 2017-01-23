@@ -83,6 +83,7 @@ signals:
 private:
     void _updateTimer           ();
     void _updateVideo           ();
+    void _mavlinkStreamUpdate   ();
 
 private:
     VideoSurface*       _videoSurface;

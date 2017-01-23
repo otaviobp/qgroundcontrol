@@ -39,6 +39,7 @@ public:
 public slots:
     void start      ();
     void stop       ();
+    void restart    ();
     void setUri     (const QString& uri);
 
 private slots:

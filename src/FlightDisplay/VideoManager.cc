@@ -45,6 +45,8 @@ VideoManager::VideoManager(QGCApplication* app)
     , _udpPort(5600) //-- Defalut Port 5600 == Solo UDP Port
     , _init(false)
 {
+    connect(&_mavlinkVideoManager, &MavlinkVideoManager::currentSettingsChanged,
+        this,&VideoManager::_mavlinkStreamUpdate);
 }
 
 //-----------------------------------------------------------------------------
@@ -154,18 +156,8 @@ VideoManager::setVideoSource(QString vSource)
 #endif
     emit isGStreamerChanged();
     qCDebug(VideoManagerLog) << "New Video Source:" << vSource;
-    /*
-     * Not working. Requires restart for now. (Undef KRTSP/kUDP above when enabling this)
     if(isGStreamer())
         _updateVideo();
-    */
-    if(_videoReceiver) {
-        if(isGStreamer()) {
-            _videoReceiver->start();
-        } else {
-            _videoReceiver->stop();
-        }
-    }
 
     if (vSource == kMavlinkStream)
         _mavlinkVideoManager.updateStreamList();
@@ -181,11 +173,9 @@ VideoManager::setUdpPort(quint16 port)
     QSettings settings;
     settings.setValue(kVideoUDPPortKey, port);
     emit udpPortChanged();
-    /*
-     * Not working. Requires restart for now. (Undef KRTSP/kUDP above when enabling this)
+
     if(_videoSource == kUDPStream)
         _updateVideo();
-    */
 }
 
 //-----------------------------------------------------------------------------
@@ -196,11 +186,9 @@ VideoManager::setRtspURL(QString url)
     QSettings settings;
     settings.setValue(kVideoRTSPUrlKey, url);
     emit rtspURLChanged();
-    /*
-     * Not working. Requires restart for now. (Undef KRTSP/kUDP above when enabling this)
+
     if(_videoSource == kRTSPStream)
         _updateVideo();
-    */
 }
 
 //-----------------------------------------------------------------------------
@@ -268,20 +256,29 @@ void VideoManager::_updateTimer()
 //-----------------------------------------------------------------------------
 void VideoManager::_updateVideo()
 {
-    if(_init) {
-        if(_videoReceiver)
-            delete _videoReceiver;
-        if(_videoSurface)
-            delete _videoSurface;
+    if(!_init)
+        return;
+
+    if(!_videoSurface)
         _videoSurface  = new VideoSurface;
+    if(!_videoReceiver) {
         _videoReceiver = new VideoReceiver(this);
-        #if defined(QGC_GST_STREAMING)
         _videoReceiver->setVideoSink(_videoSurface->videoSink());
-        if(_videoSource == kUDPStream)
-            _videoReceiver->setUri(QStringLiteral("udp://0.0.0.0:%1").arg(_udpPort));
-        else
-            _videoReceiver->setUri(_rtspURL);
-        #endif
-        _videoReceiver->start();
     }
+#if defined(QGC_GST_STREAMING)
+    if(_videoSource == kUDPStream)
+        _videoReceiver->setUri(QStringLiteral("udp://0.0.0.0:%1").arg(_udpPort));
+    else if(_videoSource == kRTSPStream)
+        _videoReceiver->setUri(_rtspURL);
+    else {
+        _videoReceiver->setUri(_mavlinkVideoManager.currentUri());
+    }
+#endif
+    _videoReceiver->restart();
+}
+
+//-----------------------------------------------------------------------------
+void VideoManager::_mavlinkStreamUpdate()
+{
+    _updateVideo();
 }
