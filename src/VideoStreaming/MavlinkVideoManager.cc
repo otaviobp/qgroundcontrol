@@ -75,6 +75,22 @@ MavlinkVideoManager::sendStreamGetCmd(int cmd, int streamId)
 
 //-----------------------------------------------------------------------------
 void
+MavlinkVideoManager::sendStreamSetCmd(int streamId, int format, uint16_t video_resolution_h, uint16_t video_resolution_v)
+{
+    mavlink_message_t message;
+    mavlink_msg_set_video_stream_settings_pack_chan(_mavlink->getSystemId(),
+            _mavlink->getComponentId(), _cameraLink->mavlinkChannel(), &message,
+            _cameraId, MAV_COMP_ID_VIDEO_STREAM, streamId, format,
+            video_resolution_h, video_resolution_v, "");
+
+    uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+    int len = mavlink_msg_to_send_buffer(buffer, &message);
+
+    _cameraLink->writeBytesSafe((const char*)buffer, len);
+}
+
+//-----------------------------------------------------------------------------
+void
 MavlinkVideoManager::_videoHeartbeatInfo(LinkInterface *link, int systemId)
 {
     if (systemId == _cameraId)
@@ -246,6 +262,7 @@ MavlinkVideoManager::currentFormatList()
 
     return list;
 }
+
 //-----------------------------------------------------------------------------
 void
 MavlinkVideoManager::setCurrentFormatIndex(int formatIndex)
@@ -259,5 +276,20 @@ MavlinkVideoManager::setCurrentFormatIndex(int formatIndex)
     data = (StreamData *)_streamList[_selectedStream];
     data->format = data->available_formats[formatIndex];
 
+    sendStreamSetCmd(data->id, data->format, 0, 0);
+    emit currentSettingsChanged();
+}
+//-----------------------------------------------------------------------------
+void
+MavlinkVideoManager::setResolution(int width, int height)
+{
+    StreamData *data;
+
+    if (_selectedStream < 0)
+        return;
+
+    data = (StreamData *)_streamList[_selectedStream];
+
+    sendStreamSetCmd(data->id, 0, width, height);
     emit currentSettingsChanged();
 }

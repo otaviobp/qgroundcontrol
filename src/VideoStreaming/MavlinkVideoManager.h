@@ -80,7 +80,6 @@ public:
     QStringList currentFormatList();
 
     void updateStreamList();
-    void sendStreamGetCmd(int cmd, int streamId);
     void setSelectedStream(int index);
     void setCurrentFormatIndex(int formatIndex);
 
@@ -90,6 +89,9 @@ signals:
     void currentSettingsChanged();
 
 private:
+    void sendStreamGetCmd(int cmd, int streamId);
+    void sendStreamSetCmd(int streamId, int format, uint16_t video_resolution_h, uint16_t video_resolution_v);
+
     int _cameraId;
     int _selectedStream;
     LinkInterface *_cameraLink;
@@ -101,6 +103,7 @@ private slots:
     void _videoHeartbeatInfo(LinkInterface *link, int systemId);
 public slots:
     void updateCurrentStream();
+    void setResolution(int width, int height);
 };
 
 #endif // MAVLINK_VIDEO_MANAGER_H
