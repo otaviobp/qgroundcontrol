@@ -104,6 +104,15 @@ enum PixelFormat {
 
 #undef fourcc
 
+struct FormatPipelineElements {
+    const char *caps;
+    const char *demux;
+    const char *parser;
+    const char *decoder;
+};
+
 extern QString pixelFormatToFourCC(PixelFormat f);
+
+extern struct FormatPipelineElements getFormatPipelineElements(PixelFormat f);
 
 #endif // VIDEO_UTILS_H

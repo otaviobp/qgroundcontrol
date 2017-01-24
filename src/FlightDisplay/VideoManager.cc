@@ -20,6 +20,7 @@
 
 #include "ScreenToolsController.h"
 #include "VideoManager.h"
+#include "VideoUtils.h"
 #include "QGCToolbox.h"
 #include "QGCCorePlugin.h"
 #include "QGCOptions.h"
@@ -266,12 +267,15 @@ void VideoManager::_updateVideo()
         _videoReceiver->setVideoSink(_videoSurface->videoSink());
     }
 #if defined(QGC_GST_STREAMING)
-    if(_videoSource == kUDPStream)
+    if(_videoSource == kUDPStream) {
         _videoReceiver->setUri(QStringLiteral("udp://0.0.0.0:%1").arg(_udpPort));
-    else if(_videoSource == kRTSPStream)
+        _videoReceiver->setStreamFormat(PixelFormat::MPEG);
+    } else if(_videoSource == kRTSPStream) {
         _videoReceiver->setUri(_rtspURL);
-    else {
+        _videoReceiver->setStreamFormat(PixelFormat::MPEG);
+    } else {
         _videoReceiver->setUri(_mavlinkVideoManager.currentUri());
+        _videoReceiver->setStreamFormat((PixelFormat)_mavlinkVideoManager.currentFormat());
     }
 #endif
     _videoReceiver->restart();

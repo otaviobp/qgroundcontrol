@@ -24,6 +24,7 @@
 #if defined(QGC_GST_STREAMING)
 #include <gst/gst.h>
 #endif
+#include "VideoUtils.h"
 
 class VideoReceiver : public QObject
 {
@@ -41,6 +42,7 @@ public slots:
     void stop       ();
     void restart    ();
     void setUri     (const QString& uri);
+    void setStreamFormat (PixelFormat format);
 
 private slots:
 #if defined(QGC_GST_STREAMING)
@@ -67,6 +69,7 @@ private:
 #if defined(QGC_GST_STREAMING)
     QTimer      _timer;
     QTcpSocket* _socket;
+    PixelFormat _streamFormat;
     bool        _serverPresent;
 #endif
 };
