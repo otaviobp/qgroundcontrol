@@ -20,6 +20,7 @@
 
 #include "ScreenToolsController.h"
 #include "VideoManager.h"
+#include "VideoUtils.h"
 #include "QGCToolbox.h"
 #include "QGCCorePlugin.h"
 #include "QGCOptions.h"
@@ -29,7 +30,9 @@ static const char* kVideoUDPPortKey = "VideoUDPPort";
 static const char* kVideoRTSPUrlKey = "VideoRTSPUrl";
 #if defined(QGC_GST_STREAMING)
 static const char* kUDPStream       = "UDP Video Stream";
+
 static const char* kRTSPStream      = "RTSP Video Stream";
+static const char* kAvahiStream   = "Zeroconf Cameras";
 #endif
 static const char* kNoVideo         = "No Video Available";
 
@@ -44,6 +47,8 @@ VideoManager::VideoManager(QGCApplication* app)
     , _udpPort(5600) //-- Defalut Port 5600 == Solo UDP Port
     , _init(false)
 {
+    connect(&_avahiVideoManager, &AvahiVideoManager::currentSettingsChanged,
+        this,&VideoManager::_avahiStreamUpdate);
 }
 
 //-----------------------------------------------------------------------------
@@ -104,7 +109,18 @@ bool
 VideoManager::isGStreamer()
 {
 #if defined(QGC_GST_STREAMING)
-    return _videoSource == kUDPStream || _videoSource == kRTSPStream;
+    return _videoSource == kUDPStream || _videoSource == kRTSPStream || _videoSource == kAvahiStream;
+#else
+    return false;
+#endif
+}
+
+//-----------------------------------------------------------------------------
+bool
+VideoManager::isAvahiStream()
+{
+#if defined(QGC_GST_STREAMING)
+    return _videoSource == kAvahiStream;
 #else
     return false;
 #endif
@@ -142,18 +158,13 @@ VideoManager::setVideoSource(QString vSource)
 #endif
     emit isGStreamerChanged();
     qCDebug(VideoManagerLog) << "New Video Source:" << vSource;
-    /*
-     * Not working. Requires restart for now. (Undef KRTSP/kUDP above when enabling this)
     if(isGStreamer())
         _updateVideo();
-    */
-    if(_videoReceiver) {
-        if(isGStreamer()) {
-            _videoReceiver->start();
-        } else {
-            _videoReceiver->stop();
-        }
-    }
+
+    if (vSource == kAvahiStream)
+        _avahiVideoManager.updateStreamList();
+    else
+        _avahiVideoManager.setSelectedStream(-1);
 }
 
 //-----------------------------------------------------------------------------
@@ -164,11 +175,9 @@ VideoManager::setUdpPort(quint16 port)
     QSettings settings;
     settings.setValue(kVideoUDPPortKey, port);
     emit udpPortChanged();
-    /*
-     * Not working. Requires restart for now. (Undef KRTSP/kUDP above when enabling this)
+
     if(_videoSource == kUDPStream)
         _updateVideo();
-    */
 }
 
 //-----------------------------------------------------------------------------
@@ -179,11 +188,9 @@ VideoManager::setRtspURL(QString url)
     QSettings settings;
     settings.setValue(kVideoRTSPUrlKey, url);
     emit rtspURLChanged();
-    /*
-     * Not working. Requires restart for now. (Undef KRTSP/kUDP above when enabling this)
+
     if(_videoSource == kRTSPStream)
         _updateVideo();
-    */
 }
 
 //-----------------------------------------------------------------------------
@@ -194,6 +201,7 @@ VideoManager::videoSourceList()
 #if defined(QGC_GST_STREAMING)
     _videoSourceList.append(kUDPStream);
     _videoSourceList.append(kRTSPStream);
+    _videoSourceList.append(kAvahiStream);
 #endif
 #ifndef QGC_DISABLE_UVC
     QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
@@ -250,20 +258,32 @@ void VideoManager::_updateTimer()
 //-----------------------------------------------------------------------------
 void VideoManager::_updateVideo()
 {
-    if(_init) {
-        if(_videoReceiver)
-            delete _videoReceiver;
-        if(_videoSurface)
-            delete _videoSurface;
+    if(!_init)
+        return;
+
+    if(!_videoSurface)
         _videoSurface  = new VideoSurface;
+    if(!_videoReceiver) {
         _videoReceiver = new VideoReceiver(this);
-        #if defined(QGC_GST_STREAMING)
         _videoReceiver->setVideoSink(_videoSurface->videoSink());
-        if(_videoSource == kUDPStream)
-            _videoReceiver->setUri(QStringLiteral("udp://0.0.0.0:%1").arg(_udpPort));
-        else
-            _videoReceiver->setUri(_rtspURL);
-        #endif
-        _videoReceiver->start();
     }
+#if defined(QGC_GST_STREAMING)
+    if(_videoSource == kUDPStream) {
+        _videoReceiver->setUri(QStringLiteral("udp://0.0.0.0:%1").arg(_udpPort));
+        _videoReceiver->setStreamFormat(PixelFormat::MPEG);
+    } else if(_videoSource == kRTSPStream) {
+        _videoReceiver->setUri(_rtspURL);
+        _videoReceiver->setStreamFormat(PixelFormat::MPEG);
+    } else {
+        _videoReceiver->setUri(_avahiVideoManager.currentUri());
+        _videoReceiver->setStreamFormat((PixelFormat)_avahiVideoManager.currentFormat());
+    }
+#endif
+    _videoReceiver->restart();
+}
+
+//-----------------------------------------------------------------------------
+void VideoManager::_avahiStreamUpdate()
+{
+    _updateVideo();
 }

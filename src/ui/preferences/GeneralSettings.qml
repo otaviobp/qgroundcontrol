@@ -448,7 +448,7 @@ QGCView {
                     anchors.horizontalCenter: parent.horizontalCenter
                     QGCLabel {
                         id:             videoLabel
-                        text:           qsTr("Video (Requires Restart)")
+                        text:           qsTr("Video")
                         font.family:    ScreenTools.demiboldFontFamily
                     }
                 }

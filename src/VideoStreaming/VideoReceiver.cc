@@ -15,8 +15,14 @@
  */
 
 #include "VideoReceiver.h"
+
+#include "VideoUtils.h"
+#include "QGCLoggingCategory.h"
+
 #include <QDebug>
 #include <QUrl>
+
+QGC_LOGGING_CATEGORY(VideoReceiverLog, "VideoReceiver")
 
 VideoReceiver::VideoReceiver(QObject* parent)
     : QObject(parent)
@@ -24,6 +30,7 @@ VideoReceiver::VideoReceiver(QObject* parent)
     , _pipeline(NULL)
     , _videoSink(NULL)
     , _socket(NULL)
+    , _streamFormat(PixelFormat::MPEG)
     , _serverPresent(false)
 #endif
 {
@@ -59,19 +66,14 @@ void VideoReceiver::setVideoSink(GstElement* sink)
 #endif
 
 #if defined(QGC_GST_STREAMING)
-static void newPadCB(GstElement * element, GstPad* pad, gpointer data)
+static void rtspsrc_pad_cb(GstElement *rtspsrc, GstPad* pad, GstElement *demux)
 {
-    gchar *name;
-    name = gst_pad_get_name(pad);
-    g_print("A new pad %s was created\n", name);
-    GstCaps * p_caps = gst_pad_get_pad_template_caps (pad);
-    gchar * description = gst_caps_to_string(p_caps);
-    qDebug() << p_caps << ", " << description;
-    g_free(description);
-    GstElement * p_rtph264depay = GST_ELEMENT(data);
-    if(gst_element_link_pads(element, name, p_rtph264depay, "sink") == false)
-        qCritical() << "newPadCB : failed to link elements\n";
-    g_free(name);
+    gchar *dynamic_pad_name = gst_pad_get_name(pad);
+
+    if (!gst_element_link_pads(rtspsrc, dynamic_pad_name, demux, "sink"))
+        qCritical() << "VideoReceiver failed to link rtspsrc pad";
+
+    g_free(dynamic_pad_name);
 }
 #endif
 
@@ -83,7 +85,7 @@ void VideoReceiver::_connected()
     _socket->deleteLater();
     _socket = NULL;
     _serverPresent = true;
-    start();
+    restart();
 }
 #endif
 
@@ -120,21 +122,26 @@ void VideoReceiver::_timeout()
 }
 #endif
 
+void VideoReceiver::restart()
+{
+    stop();
+    start();
+}
+
 void VideoReceiver::start()
 {
 #if defined(QGC_GST_STREAMING)
-    if (_uri.isEmpty()) {
-        qCritical() << "VideoReceiver::start() failed because URI is not specified";
-        return;
-    }
     if (_videoSink == NULL) {
         qCritical() << "VideoReceiver::start() failed because video sink is not set";
         return;
     }
 
-    bool isUdp = _uri.contains("udp://");
+    if (_uri.isEmpty()) {
+        qCritical() << "VideoReceiver::start() failed because URI is not specified";
+        return;
+    }
 
-    stop();
+    bool isUdp = _uri.contains("udp://");
 
     //-- For RTSP, check to see if server is there first
     if(!_serverPresent && !isUdp) {
@@ -142,7 +149,7 @@ void VideoReceiver::start()
         return;
     }
 
-    bool running = false;
+    bool gstreamer_success = false;
 
     GstElement*     dataSource  = NULL;
     GstCaps*        caps        = NULL;
@@ -168,47 +175,67 @@ void VideoReceiver::start()
         }
 
         if(isUdp) {
-            if ((caps = gst_caps_from_string("application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264")) == NULL) {
-                qCritical() << "VideoReceiver::start() failed. Error with gst_caps_from_string()";
-                break;
-            }
             g_object_set(G_OBJECT(dataSource), "uri", qPrintable(_uri), "caps", caps, NULL);
         } else {
             g_object_set(G_OBJECT(dataSource), "location", qPrintable(_uri), "latency", 0, "udp-reconnect", 1, "timeout", 5000000, NULL);
         }
 
-        if ((demux = gst_element_factory_make("rtph264depay", "rtp-h264-depacketizer")) == NULL) {
-            qCritical() << "VideoReceiver::start() failed. Error with gst_element_factory_make('rtph264depay')";
+        FormatPipelineElements elements = getFormatPipelineElements(_streamFormat);
+
+        qDebug() << "Creating pipeline for " << _uri;
+        if (!elements.demux || !elements.decoder) {
+            elements = getFormatPipelineElements(PixelFormat::JPEG);
+            if (!elements.demux || !elements.decoder) {
+                qCritical() << "VideoReceiver::start() failed. No GStreamer pipeline found for '" << pixelFormatToFourCC(_streamFormat) << "'";
+                break;
+            }
+
+            qCDebug(VideoReceiverLog) << "VideoReceiver::start(): No GStreamer pipeline for '" << pixelFormatToFourCC(_streamFormat) << "'. Using the default pipeline.";
+        } else
+            qCDebug(VideoReceiverLog) << "VideoReceiver::start(): Using GStreamer pipeline for '" << pixelFormatToFourCC(_streamFormat) << "'.";
+
+        if (isUdp && elements.caps) {
+            if ((caps = gst_caps_from_string(elements.caps)) == NULL) {
+                qCritical() << "VideoReceiver::start() failed. Error with gst_caps_from_string('" << elements.caps << "')";
+                break;
+            }
+
+            g_object_set(G_OBJECT(dataSource), "caps", caps, NULL);
+        }
+
+        if ((demux = gst_element_factory_make(elements.demux, "demux")) == NULL) {
+            qCritical() << "VideoReceiver::start() failed. Error with gst_element_factory_make('" << elements.demux << "')";
             break;
         }
 
         if(!isUdp) {
-            g_signal_connect(dataSource, "pad-added", G_CALLBACK(newPadCB), demux);
+            g_signal_connect(dataSource, "pad-added", G_CALLBACK(rtspsrc_pad_cb), demux);
         }
 
-        if ((parser = gst_element_factory_make("h264parse", "h264-parser")) == NULL) {
-            qCritical() << "VideoReceiver::start() failed. Error with gst_element_factory_make('h264parse')";
+        if (elements.parser) {
+            if ((parser = gst_element_factory_make(elements.parser, "parser")) == NULL) {
+                qCritical() << "VideoReceiver::start() failed. Error with gst_element_factory_make" << elements.parser << "')";
+                break;
+            }
+        }
+
+        if ((decoder = gst_element_factory_make(elements.decoder, "decoder")) == NULL) {
+            qCritical() << "VideoReceiver::start() failed. Error with gst_element_factory_make('" << elements.decoder << "')";
             break;
         }
 
-        if ((decoder = gst_element_factory_make("avdec_h264", "h264-decoder")) == NULL) {
-            qCritical() << "VideoReceiver::start() failed. Error with gst_element_factory_make('avdec_h264')";
-            break;
-        }
-
-        gst_bin_add_many(GST_BIN(_pipeline), dataSource, demux, parser, decoder, _videoSink, NULL);
-
-        gboolean res = FALSE;
-
-        if(isUdp) {
-            res = gst_element_link_many(dataSource, demux, parser, decoder, _videoSink, NULL);
+        if (parser) {
+            gst_bin_add_many(GST_BIN(_pipeline), dataSource, demux, parser, decoder, _videoSink, NULL);
+            if (gst_element_link_many(demux, parser, decoder, _videoSink, NULL) != (gboolean)TRUE) {
+                qCritical() << "VideoReceiver::start() failed. Error with gst_element_link_many()";
+                break;
+            }
         } else {
-            res = gst_element_link_many(demux, parser, decoder, _videoSink, NULL);
-        }
-
-        if (!res) {
-            qCritical() << "VideoReceiver::start() failed. Error with gst_element_link_many()";
-            break;
+            gst_bin_add_many(GST_BIN(_pipeline), dataSource, demux, decoder, _videoSink, NULL);
+            if (gst_element_link_many(demux, decoder, _videoSink, NULL) != (gboolean)TRUE) {
+                qCritical() << "VideoReceiver::start() failed. Error with gst_element_link_many()";
+                break;
+            }
         }
 
         dataSource = demux = parser = decoder = NULL;
@@ -221,7 +248,7 @@ void VideoReceiver::start()
             bus = NULL;
         }
 
-        running = gst_element_set_state(_pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
+        gstreamer_success = gst_element_set_state(_pipeline, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
 
     } while(0);
 
@@ -230,7 +257,7 @@ void VideoReceiver::start()
         caps = NULL;
     }
 
-    if (!running) {
+    if (!gstreamer_success) {
         qCritical() << "VideoReceiver::start() failed";
 
         if (decoder != NULL) {
@@ -258,6 +285,7 @@ void VideoReceiver::start()
             _pipeline = NULL;
         }
     }
+
 #endif
 }
 
@@ -275,8 +303,12 @@ void VideoReceiver::stop()
 
 void VideoReceiver::setUri(const QString & uri)
 {
-    stop();
     _uri = uri;
+}
+
+void VideoReceiver::setStreamFormat(PixelFormat format)
+{
+    _streamFormat = format;
 }
 
 #if defined(QGC_GST_STREAMING)

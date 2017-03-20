@@ -567,6 +567,7 @@ HEADERS += \
     src/ui/uas/UASQuickViewItem.h \
     src/ui/uas/UASQuickViewItemSelect.h \
     src/ui/uas/UASQuickViewTextItem.h \
+    src/ViewWidgets/VideoStreamingWidget.h \
 }
 
 iOSBuild {
@@ -714,6 +715,7 @@ SOURCES += \
     src/ui/uas/UASQuickViewItem.cc \
     src/ui/uas/UASQuickViewItemSelect.cc \
     src/ui/uas/UASQuickViewTextItem.cc \
+    src/ViewWidgets/VideoStreamingWidget.cc \
 }
 
 # Palette test widget in debug builds
@@ -933,17 +935,23 @@ INCLUDEPATH += \
     src/VideoStreaming
 
 HEADERS += \
+    src/VideoStreaming/AvahiVideoScanner.h \
+    src/VideoStreaming/AvahiVideoManager.h \
     src/VideoStreaming/VideoItem.h \
     src/VideoStreaming/VideoReceiver.h \
     src/VideoStreaming/VideoStreaming.h \
     src/VideoStreaming/VideoSurface.h \
     src/VideoStreaming/VideoSurface_p.h \
+    src/VideoStreaming/VideoUtils.h \
 
 SOURCES += \
+    src/VideoStreaming/AvahiVideoScanner.cc \
+    src/VideoStreaming/AvahiVideoManager.cc \
     src/VideoStreaming/VideoItem.cc \
     src/VideoStreaming/VideoReceiver.cc \
     src/VideoStreaming/VideoStreaming.cc \
     src/VideoStreaming/VideoSurface.cc \
+    src/VideoStreaming/VideoUtils.cc \
 
 contains (CONFIG, DISABLE_VIDEOSTREAMING) {
     message("Skipping support for video streaming (manual override from command line)")

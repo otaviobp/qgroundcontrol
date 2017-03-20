@@ -30,6 +30,10 @@ LinuxBuild {
         PKGCONFIG   += gstreamer-1.0  gstreamer-video-1.0
         CONFIG      += VideoEnabled
     }
+    packagesExist(avahi-core) {
+        PKGCONFIG   += avahi-client avahi-core avahi-qt4
+        CONFIG      += AvahiEnabled
+    }
 } else:MacBuild {
     #- gstreamer framework installed by the gstreamer devel installer
     GST_ROOT = /Library/Frameworks/GStreamer.framework
